@@ -1,0 +1,97 @@
+---
+output:
+  html_document:
+    highlight: textmate
+    theme: readable
+    
+---
+
+
+## Weight lifting sensor data analysis
+##### Author: "Salvatore Lenza"
+##### Rome, "Sunday, December 27, 2015"
+
+#### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+The goal of this project is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which praticipants did the exercise.
+
+We propose random forest based model because no need cross-validation or a separate test set to get an unbiased estimate of the test set error.
+
+The dependent variable or response is the "classe" variable in the training set.
+
+```{r echo = FALSE}
+setwd("C:/Users/iissll/Documents/coursera/Practical_Machine_Learning")
+library(caret)
+library(randomForest)
+```
+
+#### Data getting and cleaning
+```{r  echo = TRUE}
+training <- read.csv("pml-training.csv");
+testing <-  read.csv("pml-testing.csv");
+
+str(training)
+dim(testing)
+
+irr_V <- grep("X|timestamp|user_name|new_window", names(training));
+training <- training[,-irr_V];
+testing <- testing[,-irr_V];
+
+training[is.na(training)] <- 0
+
+n_V<- nearZeroVar(training);
+training <- training[,-n_V];
+testing <- testing[,-n_V];
+```
+
+#### Split the preprocessed training data into training set and validation set  
+```{r}
+set.seed(1968);
+in_Train <- createDataPartition(training$classe, p=0.7, list = FALSE);
+new_training <- training[in_Train,];
+new_validation <- training[-in_Train,];
+
+```
+#### Check the correlations 
+There doesn't seem to be any predictors strongly correlated with the outcome variable, so linear regression model may not be a good option. Random forest model may be more robust for this data.
+
+```{r}
+cor <- abs(sapply(colnames(new_training[, -ncol(training)]), function(x) cor(as.numeric(new_training[, x]), as.numeric(new_training$classe), method = "spearman")))
+
+cor
+```
+
+#### Model Fitting
+```{r}
+model_Fit <- randomForest(classe ~., data=new_training, do.trace = 10)
+model_Fit
+varImpPlot(model_Fit)
+model_Pred <- predict(model_Fit,new_validation);
+confusionMatrix(model_Pred, new_validation$classe);
+```
+The random forest algorithm generates a model with accuracy 0.9968.
+
+## Results
+
+Now running the model on the test set (20 test cases).  
+```{r}
+pred_Final <- predict(model_Fit, testing);
+pred_Final;
+
+```
+The algorithm does correctly predicts the way in which the exercises were carried out. The outputs are to be saved to files for submission.
+```{r}
+results <- as.vector(pred_Final)
+
+write_files = function(x) {
+  n = length(x)
+  for (i in 1:n) {
+    filename = paste0("problem_id_", i, ".txt")
+    write.table(x[i], file = filename, quote=FALSE, row.names = FALSE, col.names = FALSE)
+  }
+}
+write_files(results)
+
+```
